@@ -149,9 +149,8 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
-      const API_KEY =
-        "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";
-      const API_URL = "https://openrouter.ai/api/v1/chat/completions";
+      
+      const API_URL = "/api/mindmap";
       const MODEL = "deepseek/deepseek-chat";
       const canvas = document.getElementById("mindmap-canvas");
       const ctx = canvas.getContext("2d");
@@ -160,7 +159,7 @@
       const topicInput = document.getElementById("topic-input");
       const errorMessage = document.getElementById("error-message");
       let lastMapData = null;
-
+      
       function clearCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
@@ -523,66 +522,56 @@
       }
 
       async function fetchMindMap(topic, retry = true) {
-        const prompt = `Create a structured mind map on the topic: '${topic}' with 6 headings and 3 short subpoints each. Return only JSON: [ { heading: '', subpoints: ['', '', ''] }, ... ]`;
-        try {
-          const res = await fetch(API_URL, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${API_KEY}`,
-              "Content-Type": "application/json",
-              // 'HTTP-Referer': 'https://openrouter.ai/', // Removed OpenRouter
-              "X-Title": "Mind Map Generator",
-            },
-            body: JSON.stringify({
-              model: MODEL,
-              messages: [{ role: "user", content: prompt }],
-            }),
-          });
-          if (!res.ok) throw new Error("API error: " + res.status);
-          const data = await res.json();
-          if (
-            !data.choices ||
-            !data.choices[0] ||
-            !data.choices[0].message ||
-            !data.choices[0].message.content
-          ) {
-            throw new Error("Malformed API response");
-          }
-          // Try to extract JSON from response
-          let content = data.choices[0].message.content;
-          let jsonStart = content.indexOf("[");
-          let jsonEnd = content.lastIndexOf("]");
-          if (jsonStart === -1 || jsonEnd === -1)
-            throw new Error("No JSON found in response");
-          let jsonString = content.slice(jsonStart, jsonEnd + 1);
-          let parsed;
-          try {
-            parsed = JSON.parse(jsonString);
-          } catch (e) {
-            throw new Error("Failed to parse JSON");
-          }
-          // Validate structure
-          if (
-            !Array.isArray(parsed) ||
-            parsed.length !== 6 ||
-            !parsed.every(
-              (obj) =>
-                obj.heading &&
-                Array.isArray(obj.subpoints) &&
-                obj.subpoints.length === 3
-            )
-          ) {
-            throw new Error("Malformed mind map structure");
-          }
-          return parsed;
-        } catch (err) {
-          if (retry) {
-            // Retry once
-            return await fetchMindMap(topic, false);
-          }
-          throw err;
-        }
-      }
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ topic }),
+    });
+
+    if (!res.ok) throw new Error("API error: " + res.status);
+
+    const data = await res.json();
+
+    // Try to extract JSON from response
+    let content = data.choices?.[0]?.message?.content || "";
+    let jsonStart = content.indexOf("[");
+    let jsonEnd = content.lastIndexOf("]");
+    if (jsonStart === -1 || jsonEnd === -1)
+      throw new Error("No JSON found in response");
+
+    let jsonString = content.slice(jsonStart, jsonEnd + 1);
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch (e) {
+      throw new Error("Failed to parse JSON");
+    }
+
+    // Validate structure
+    if (
+      !Array.isArray(parsed) ||
+      parsed.length !== 6 ||
+      !parsed.every(
+        (obj) =>
+          obj.heading &&
+          Array.isArray(obj.subpoints) &&
+          obj.subpoints.length === 3
+      )
+    ) {
+      throw new Error("Malformed mind map structure");
+    }
+
+    return parsed;
+  } catch (err) {
+    if (retry) {
+      return await fetchMindMap(topic, false); // Retry once
+    }
+    throw err;
+  }
+}
 
       generateBtn.addEventListener("click", async () => {
         const topic = topicInput.value.trim();
